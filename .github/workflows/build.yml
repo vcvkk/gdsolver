@@ -1,5 +1,6 @@
-# Windows only, because mod.json declares `gd.win` and nothing else. The other platforms in
-# Geode's example workflow cannot build this and claiming them would be a lie about what runs.
+# iOS only, because mod.json declares `gd.ios` and nothing else. The other platforms in
+# Geode's example workflow are not targets of this port and claiming them would be a lie about
+# what runs.
 #
 # The point of building here rather than locally is that the binary attached to a release can be
 # traced to a commit of the public tree. The pitfalls page asks for it for that reason ("makes it
@@ -23,9 +24,9 @@ permissions:
   contents: write
 
 jobs:
-  windows:
-    name: Windows
-    runs-on: windows-latest
+  ios:
+    name: iOS
+    runs-on: macos-latest
 
     steps:
       - uses: actions/checkout@v7
@@ -35,6 +36,8 @@ jobs:
       - name: Build the mod
         id: build
         uses: geode-sdk/build-geode-mod@main
+        with:
+          target: iOS
 
       - name: Upload the package
         uses: actions/upload-artifact@v7

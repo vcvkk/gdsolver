@@ -2,6 +2,10 @@ cmake_minimum_required(VERSION 3.21)
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_VISIBILITY_PRESET hidden)
+# iOS only (mod.json declares `gd.ios` and nothing else); the device is arm64.
+if ("${CMAKE_SYSTEM_NAME}" STREQUAL "iOS" OR IOS)
+    set(CMAKE_OSX_ARCHITECTURES "arm64")
+endif()
 
 project(gdsolver VERSION 0.1.0 LANGUAGES CXX)
 
@@ -12,6 +16,10 @@ project(gdsolver VERSION 0.1.0 LANGUAGES CXX)
 #         and (eventually) hosts the solver loop in-process
 option(GDSOLVER_BUILD_DP "Build the DP core library and the leveldp CLI" ON)
 option(GDSOLVER_BUILD_MOD "Build the Geode mod (requires GEODE_SDK)" ON)
+# The leveldp / seqcall executables are desk tools; on a device the core runs inside the mod.
+if ("${CMAKE_SYSTEM_NAME}" STREQUAL "iOS" OR IOS)
+    set(GDSOLVER_BUILD_DP OFF)
+endif()
 
 # The solver core is an INTERFACE target (header-only), so it is always added: the mod links
 # it too. Only the leveldp CLI is gated on GDSOLVER_BUILD_DP.

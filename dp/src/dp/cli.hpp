@@ -4438,7 +4438,7 @@ inline int cliMain(int argc, char** argv) {
                     if (o->uid == g_hazDbgUid) { seen = o; break; }
             std::printf("trigdbg t=%lld gtrig=0x%08x gFireB=0x%08x lockOff=%.3f "
                         "win=[%.1f,%.1f] n=%zu uid=%d %s\n",
-                        (long long)t, (unsigned)gtrig, (unsigned)gFireB,
+                        (long long)t, (unsigned)(uintptr_t)gtrig, (unsigned)(uintptr_t)gFireB,
                         (double)(gLockOff + (float)sdx), wLo, wHi, near.size(),
                         g_hazDbgUid,
                         seen ? "" : "NOT-IN-WINDOW");
