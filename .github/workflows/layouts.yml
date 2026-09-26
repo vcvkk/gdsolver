@@ -6,6 +6,12 @@ name: Layouts
 
 on:
   workflow_dispatch:
+  # A manual dispatch only exists once the workflow is on the default branch; until then a push
+  # that touches the probe runs it.
+  push:
+    paths:
+      - "tools/layout-probe/**"
+      - ".github/workflows/layouts.yml"
 
 jobs:
   layouts:
