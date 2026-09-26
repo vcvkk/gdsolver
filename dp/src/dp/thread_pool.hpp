@@ -1,7 +1,67 @@
 #pragma once
 #include "dp/state.hpp"
+#if defined(__APPLE__)
+#include <pthread.h>
+#endif
 
 namespace dp {
+
+// A joinable thread with a stack the step function fits in. std::thread gives a secondary thread
+// 512 KB on Apple platforms (1 MB on Windows, 8 MB on Linux), and a worker runs the per-tick step,
+// which is one very large function; there it is created through pthreads with 8 MB instead.
+class WorkerThread {
+public:
+    template <class F>
+    explicit WorkerThread(F&& f) {
+#if defined(__APPLE__)
+        auto* fn = new std::function<void()>(std::forward<F>(f));
+        pthread_attr_t attr;
+        pthread_attr_init(&attr);
+        pthread_attr_setstacksize(&attr, size_t(8) << 20);
+        const int rc = pthread_create(&th_, &attr, [](void* p) -> void* {
+            std::unique_ptr<std::function<void()>> g(static_cast<std::function<void()>*>(p));
+            (*g)();
+            return nullptr;
+        }, fn);
+        pthread_attr_destroy(&attr);
+        if (rc != 0) {                       // no big stack to be had: the default one, then
+            pthread_create(&th_, nullptr, [](void* p) -> void* {
+                std::unique_ptr<std::function<void()>> g(static_cast<std::function<void()>*>(p));
+                (*g)();
+                return nullptr;
+            }, fn);
+        }
+        joinable_ = true;
+#else
+        th_ = std::thread(std::forward<F>(f));
+#endif
+    }
+    WorkerThread(WorkerThread&& o) noexcept : th_(std::move(o.th_)) {
+#if defined(__APPLE__)
+        joinable_ = o.joinable_;
+        o.joinable_ = false;
+#endif
+    }
+    WorkerThread(const WorkerThread&) = delete;
+    WorkerThread& operator=(const WorkerThread&) = delete;
+    WorkerThread& operator=(WorkerThread&&) = delete;
+    void join() {
+#if defined(__APPLE__)
+        if (joinable_) pthread_join(th_, nullptr);
+        joinable_ = false;
+#else
+        th_.join();
+#endif
+    }
+
+private:
+#if defined(__APPLE__)
+    pthread_t th_{};
+    bool joinable_ = false;
+#else
+    std::thread th_;
+#endif
+};
 
 // A fixed pool with a generation counter. Threads are created ONCE: a layer is
 // ~microseconds of work per state and a level is ~20,000 layers, so spawning
@@ -83,7 +143,7 @@ private:
     }
     static constexpr size_t kChunk = 32;
     size_t chunk_ = kChunk;
-    std::vector<std::thread> ths_;
+    std::vector<WorkerThread> ths_;
     std::mutex m_;
     std::condition_variable cvStart_, cvDone_;
     const std::function<void(size_t)>* fn_ = nullptr;
