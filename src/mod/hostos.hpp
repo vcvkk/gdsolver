@@ -12,7 +12,7 @@
 #include <pthread.h>
 #endif
 
-namespace platform {
+namespace hostos {
 
 // {current, peak} physical memory of the process in MB. iOS reports the footprint the jetsam
 // limit is measured against (phys_footprint), which is the number that decides whether a long
@@ -65,4 +65,4 @@ inline uintptr_t stackTop() {
 #endif
 }
 
-}  // namespace platform
+}  // namespace hostos

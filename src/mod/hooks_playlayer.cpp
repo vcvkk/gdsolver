@@ -425,11 +425,11 @@ class $modify(PlayLayer) {
                 // image, in stack order -- CANDIDATES, not a call chain. The stack runs from a
                 // local up to the thread's stack top; dladdr decides which image a value is in.
                 uintptr_t sp = (uintptr_t)&kept;
-                uintptr_t end = platform::stackTop();
+                uintptr_t end = hostos::stackTop();
                 if (end > sp + 0x4000 || end < sp) end = sp + 0x4000;
                 for (uintptr_t p = sp; p + 8 <= end && kept < 6 && o < kSb - 20; p += 8) {
                     uintptr_t rva = 0;
-                    if (!platform::gameRva(*(uintptr_t*)p, rva)) continue;
+                    if (!hostos::gameRva(*(uintptr_t*)p, rva)) continue;
                     o += snprintf(sb + o, kSb - o, "%s%llx", kept++ ? "," : "",
                                   (unsigned long long)rva);
                 }

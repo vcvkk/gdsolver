@@ -308,14 +308,14 @@ class $modify(PlayerObject) {
 #ifndef GEODE_IS_WINDOWS
         {
             void* fr[24];
-            const int n = platform::captureStack(fr, 24);
+            const int n = hostos::captureStack(fr, 24);
             const auto base = (uintptr_t)geode::base::get();
             std::string cs;
             for (int i = 0; i < n; ++i) {
                 const uintptr_t a = (uintptr_t)fr[i];
                 uintptr_t rva = 0;
                 char t[32];
-                if (platform::gameRva(a, rva))
+                if (hostos::gameRva(a, rva))
                     snprintf(t, sizeof(t), " gd:%llX", (unsigned long long)rva);
                 else
                     snprintf(t, sizeof(t), " ?%llX", (unsigned long long)a);

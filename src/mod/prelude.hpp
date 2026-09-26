@@ -45,7 +45,7 @@
 
 using namespace geode::prelude;
 
-#include "mod/platform.hpp"
+#include "mod/hostos.hpp"
 
 // The byte a member occupies, as memory holds it. The diagnostics used to read game fields by raw
 // Windows 2.2081 offset and print the byte they found; every one of those offsets turned out to be

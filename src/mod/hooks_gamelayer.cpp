@@ -42,7 +42,7 @@ static double g_secResetMs = 0.0;
 // not something transient). No third guess: the struct has names.
 static void procMemMB(size_t& cur, size_t& peak) {
 #ifndef GEODE_IS_WINDOWS
-    platform::procMemMB(cur, peak);
+    hostos::procMemMB(cur, peak);
 #else
     using Fn = int(__stdcall*)(HANDLE, PROCESS_MEMORY_COUNTERS*, DWORD);
     static Fn fn = (Fn)GetProcAddress(GetModuleHandleA("kernel32.dll"),
