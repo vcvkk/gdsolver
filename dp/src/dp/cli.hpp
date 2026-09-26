@@ -31,7 +31,7 @@
 #include "dp/reset.hpp"
 #include "dp/clearance.hpp"
 #include "dp/refwatch.hpp"
-#include <xmmintrin.h>   // _mm_getcsr: see the fpenv line at the top of cliMain
+#include "dp/fpenv.hpp"   // see the fpenv line at the top of cliMain
 
 namespace dp {
 
@@ -107,11 +107,11 @@ inline int cliMain(int argc, char** argv) {
     // sends stdout to DEVNULL (py/quick_regress.py:717), so this changes no
     // acceptance. `--mxcsr <hex>` then sets it, which is what turns the reading
     // into an experiment -- without the flag nothing here alters a single bit.
-    std::printf("fpenv: mxcsr=0x%04x\n", (unsigned)_mm_getcsr());
+    std::printf("fpenv: %s=0x%04x\n", kFpenvName, fpenvRead());
     for (int i = 1; i + 1 < argc; ++i)
         if (!std::strcmp(argv[i], "--mxcsr")) {
-            _mm_setcsr((unsigned)std::strtoul(argv[i + 1], nullptr, 0));
-            std::printf("fpenv: mxcsr set to 0x%04x\n", (unsigned)_mm_getcsr());
+            fpenvWrite((unsigned)std::strtoul(argv[i + 1], nullptr, 0));
+            std::printf("fpenv: %s set to 0x%04x\n", kFpenvName, fpenvRead());
         }
     // --eval-padgate: evaluate orientedHit() -- the SHIPPED pad predicate the
     // step.hpp pad loop calls -- on cases read from stdin, and exit. No level,

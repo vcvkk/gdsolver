@@ -3,7 +3,7 @@
 #include <mutex>         // the checkpoint death handover (g_ckMx)
 #include <set>
 #include <thread>        // the solver worker
-#include <xmmintrin.h>   // _mm_getcsr: see the fpenv line in logSolverArgs
+#include "dp/fpenv.hpp"   // see the fpenv line in logSolverArgs
 // Stage C: the repair loop, inside the game.
 //
 // The loop is a loop around two things the mod already has: solving (dp/, linked in since
@@ -1685,8 +1685,8 @@ inline void logSolverArgs(const std::vector<std::string>& a) {
     // Rounding mode is a runtime property of the process, and the process the
     // mod lives in has had cocos2d, fmod and the graphics driver in it first.
     char fb[64];
-    std::snprintf(fb, sizeof fb, "dpsolve: fpenv mxcsr=0x%04x",
-                  (unsigned)_mm_getcsr());
+    std::snprintf(fb, sizeof fb, "dpsolve: fpenv %s=0x%04x",
+                  dp::kFpenvName, dp::fpenvRead());
     writeResult(fb);
     // ...and WHICH BYTES the file arguments held when this call was made.
     //
