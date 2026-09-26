@@ -1,0 +1,42 @@
+# Class layouts for the iOS port. gdsolver reads a number of PlayerObject / GJBaseGameLayer /
+# GameObject fields by raw Windows 2.2081 offset; this dumps the compiler's record layouts of
+# those classes on Windows and on iOS, so each Windows offset can be traced to the member that
+# holds it and translated to that member's iOS offset. Tooling only: nothing here ships.
+name: Layouts
+
+on:
+  workflow_dispatch:
+
+jobs:
+  layouts:
+    strategy:
+      fail-fast: false
+      matrix:
+        config:
+          - name: Win64
+            os: windows-latest
+            target: Win64
+          - name: iOS
+            os: macos-latest
+            target: iOS
+
+    name: ${{ matrix.config.name }}
+    runs-on: ${{ matrix.config.os }}
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Build the probe
+        uses: geode-sdk/build-geode-mod@main
+        with:
+          path: tools/layout-probe
+          target: ${{ matrix.config.target }}
+
+      - name: Dump the layouts
+        shell: bash
+        run: python3 tools/layout-probe/dump_layouts.py tools/layout-probe/build "layouts-${{ matrix.config.name }}.txt"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: layouts-${{ matrix.config.name }}
+          path: layouts-${{ matrix.config.name }}.txt

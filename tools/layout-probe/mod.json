@@ -1,0 +1,12 @@
+{
+	"geode": "5.10.1",
+	"gd": {
+		"win": "2.2081",
+		"ios": "2.2081"
+	},
+	"id": "gdsolver.layout-probe",
+	"name": "gdsolver layout probe",
+	"version": "v0.0.1",
+	"developers": ["gdsolver"],
+	"description": "Build-time only: dumps class layouts for the iOS port. Not meant to be installed."
+}
