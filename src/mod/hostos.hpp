@@ -4,6 +4,9 @@
 // RtlCaptureStackBackTrace); on iOS they come from Mach and dyld. Nothing here touches physics.
 #include <cstddef>
 #include <cstdint>
+#include <functional>
+#include <memory>
+#include <thread>
 
 #ifdef GEODE_IS_IOS
 #include <dlfcn.h>
@@ -62,6 +65,35 @@ inline uintptr_t stackTop() {
     return (uintptr_t)pthread_get_stackaddr_np(pthread_self());
 #else
     return 0;
+#endif
+}
+
+// Run `fn` on a new detached thread with a stack of at least `stackBytes`. std::thread gives a
+// secondary thread 512 KB on iOS (Windows gives 1 MB), and the solver's entry point is one very
+// large function; the worker gets room to spare rather than a guess at its frame sizes.
+inline void spawnDetached(std::function<void()> fn, size_t stackBytes) {
+#ifdef GEODE_IS_IOS
+    auto* heap = new std::function<void()>(std::move(fn));
+    pthread_attr_t attr;
+    pthread_attr_init(&attr);
+    pthread_attr_setstacksize(&attr, stackBytes);
+    pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+    pthread_t th;
+    const int rc = pthread_create(&th, &attr, [](void* p) -> void* {
+        std::unique_ptr<std::function<void()>> f(static_cast<std::function<void()>*>(p));
+        (*f)();
+        return nullptr;
+    }, heap);
+    pthread_attr_destroy(&attr);
+    if (rc != 0) {   // could not get the big stack: run with the default one rather than not at all
+        std::thread([heap] {
+            std::unique_ptr<std::function<void()>> f(heap);
+            (*f)();
+        }).detach();
+    }
+#else
+    (void)stackBytes;
+    std::thread(std::move(fn)).detach();
 #endif
 }
 

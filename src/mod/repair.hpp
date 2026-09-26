@@ -3759,7 +3759,7 @@ inline void spawn(int kind, long long arg, const char* phase) {
     g_paused = true;
     g_hudPhase = phase;
     const int gen = g_generation.load();   // this session's generation, read on the main thread
-    std::thread([kind, arg, gen]() {
+    hostos::spawnDetached([kind, arg, gen]() {
         bool ok = false;
         try {
             if (kind == JobFirstSolve) {
@@ -3852,7 +3852,7 @@ inline void spawn(int kind, long long arg, const char* phase) {
         g_haveNewPlan = ok;
         g_resultGeneration = gen;   // set before g_finished, same ordering convention as g_rc
         g_finished = true;
-    }).detach();
+    }, 16u << 20);   // 16 MB stack (see hostos::spawnDetached)
 }
 
 // What begins the run: a real search, or a seeded plan waiting to be verified. Both call sites
