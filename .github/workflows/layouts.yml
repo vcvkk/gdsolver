@@ -40,9 +40,11 @@ jobs:
 
       - name: Dump the layouts
         shell: bash
-        run: python3 tools/layout-probe/dump_layouts.py tools/layout-probe/build "layouts-${{ matrix.config.name }}.txt"
+        run: python3 tools/layout-probe/dump_layouts.py tools/layout-probe/build "layouts-${{ matrix.config.name }}.txt" "vtables-${{ matrix.config.name }}.txt"
 
       - uses: actions/upload-artifact@v7
         with:
           name: layouts-${{ matrix.config.name }}
-          path: layouts-${{ matrix.config.name }}.txt
+          path: |
+            layouts-${{ matrix.config.name }}.txt
+            vtables-${{ matrix.config.name }}.txt

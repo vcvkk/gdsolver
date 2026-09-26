@@ -1,12 +1,13 @@
 """Re-run probe.cpp's compile command with -fdump-record-layouts and keep the classes we need.
 
-usage: dump_layouts.py <build dir> <output file>
+usage: dump_layouts.py <build dir> <output file> [vtable output file]
 
 The command comes from compile_commands.json, so the flags (target triple, defines, include
 paths, the bindings) are exactly the ones the mod is built with on this platform. The compiler
 launcher and the precompiled header are dropped: a layout read out of a PCH is not re-printed.
 """
 import json
+import os
 import re
 import shlex
 import subprocess
@@ -55,7 +56,9 @@ for i, a in enumerate(args):
         continue
     cleaned.append(a)
 
-cleaned += ["-fsyntax-only", "-Xclang", "-fdump-record-layouts"]
+# -emit-llvm -S rather than -fsyntax-only: vtable layouts are computed during codegen.
+cleaned += ["-S", "-emit-llvm", "-o", os.devnull,
+            "-Xclang", "-fdump-record-layouts", "-Xclang", "-fdump-vtable-layouts"]
 print("running:", " ".join(cleaned[:3]), "...", flush=True)
 proc = subprocess.run(cleaned, cwd=entry["directory"], capture_output=True, text=True)
 if proc.returncode != 0:
@@ -75,6 +78,14 @@ for b in blocks:
         kept.append("*** Dumping AST Record Layout" + b.rstrip() + "\n")
 
 out.write_text("".join(kept))
+
+if len(sys.argv) > 3:
+    # Vtable dumps start with "VFTable for" (MSVC ABI) or "Vtable for" (Itanium) and end at a
+    # blank line; keep the ones that describe GameObject.
+    vt = [b for b in re.split(r"\n(?=V(?:FT|t)able for )", proc.stdout)
+          if re.match(r"V(?:FT|t)able for ", b) and "GameObject'" in b.split("\n", 1)[0]]
+    Path(sys.argv[3]).write_text("\n".join(v.split("\n\n", 1)[0] for v in vt) + "\n")
+    print(f"kept {len(vt)} vtable dumps")
 print(f"kept {len(kept)} of {len(blocks) - 1} layouts: {sorted(seen)}")
 missing = WANTED - seen
 if missing:
