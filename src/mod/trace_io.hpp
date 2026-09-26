@@ -32,7 +32,12 @@ inline unsigned char g_ckptOobLatch = 0;
 //                what :108 does every substep.
 //
 // So the latch is 0xC38 and the audit's correction was the wrong way round.
-inline constexpr std::size_t kOobLatchOff = 0xC38;
+// It is the start of PlayerObject::m_isOutOfBounds (tools/layout-probe), taken from the member so
+// it holds on the layout the build targets.
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Winvalid-offsetof"
+inline constexpr std::size_t kOobLatchOff = offsetof(PlayerObject, m_isOutOfBounds);   // 0xC38
+#pragma clang diagnostic pop
 // (the dash held across a restore lives with its type, in secsolve.hpp)
 // y velocity at the checkpoint, full precision, for hole 3 of brief-018 -- the
 // restore is read as re-rounding it onto the 0.001 grid, which would lose the

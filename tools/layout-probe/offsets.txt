@@ -3,7 +3,7 @@
 PlayerObject 0x187 oob-latch-candidate(comment)
 PlayerObject 0x394 s394
 PlayerObject 0x398 s398
-PlayerObject 0x515 canary
+GameObject 0x515 o515(obj)
 PlayerObject 0x598 slopeStart(double)
 PlayerObject 0x5b8 bottom-collision-log-q0
 PlayerObject 0x5c0 bottom-collision-log-q1
@@ -101,3 +101,5 @@ EnterEffectInstance 0x64 scaleYV
 EnterEffectInstance 0x74 rotV
 EnterEffectInstance 0xa0 trigger
 EnterEffectInstance 0xc0 groupIndex
+PlayerObject 0x9b0 on-slope
+PlayerObject 0x9b8 slope-under

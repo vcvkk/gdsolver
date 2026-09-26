@@ -60,11 +60,16 @@ class $modify(PlayLayer) {
     }
 
     void safeUpdateVisibility(float dt) {
+#ifdef GEODE_IS_WINDOWS
         __try {
             PlayLayer::updateVisibility(dt);
         } __except (EXCEPTION_EXECUTE_HANDLER) {
             logVisibilityCrashSwallowed();
         }
+#else
+        // No structured exceptions outside Windows: the pass runs unguarded.
+        PlayLayer::updateVisibility(dt);
+#endif
     }
     bool init(GJGameLevel* level, bool useReplay, bool dontCreateObjects) {
         // Depending on the panel mode, auto-configure a session whichever level is entered.
@@ -80,6 +85,16 @@ class $modify(PlayLayer) {
         g_progressAtStart = sampleProgress(level);
         // cfg `rngfresh` (see g_rngFresh): the first level keeps the seeds it found and
         // saves them; every later level of the same game starts from those values again.
+#ifndef GEODE_IS_WINDOWS
+        // The three LCG seeds live at fixed addresses inside the Windows 2.2081 image; nobody has
+        // located them in the iOS binary yet, so these two cfg keys are refused rather than
+        // pointed at the wrong memory. The solver itself does not depend on them (Area Move
+        // variance is handled by areaenv's envelopes, not by pinning the seeds).
+        if (g_rngFresh || g_rngSeedSet) {
+            writeResult("rngfresh/rngseed: not available on this platform (seed addresses unknown)");
+            g_rngFresh = g_rngSeedSet = false;
+        }
+#endif
         if (g_rngFresh) {
             static bool saved = false;
             static long long seeds[3];
@@ -400,6 +415,25 @@ class $modify(PlayLayer) {
             // `killer:` line below waits for.
             if (g_cfg.killerSite && !player->m_isDead && !secsolve::g_noKill
                 && !secsolve::g_active && !g_cfg.noDeath) {
+#ifndef GEODE_IS_WINDOWS
+                char* sb = siteBuf;
+                constexpr int kSb = (int)sizeof siteBuf;
+                int o = snprintf(sb, kSb, "killsite: t=%lld obj=%s rva=",
+                                 (long long)g_tick, object ? "yes" : "NULL");
+                int kept = 0;
+                // The same scan as the Windows branch: stack slots that point into the game
+                // image, in stack order -- CANDIDATES, not a call chain. The stack runs from a
+                // local up to the thread's stack top; dladdr decides which image a value is in.
+                uintptr_t sp = (uintptr_t)&kept;
+                uintptr_t end = platform::stackTop();
+                if (end > sp + 0x4000 || end < sp) end = sp + 0x4000;
+                for (uintptr_t p = sp; p + 8 <= end && kept < 6 && o < kSb - 20; p += 8) {
+                    uintptr_t rva = 0;
+                    if (!platform::gameRva(*(uintptr_t*)p, rva)) continue;
+                    o += snprintf(sb + o, kSb - o, "%s%llx", kept++ ? "," : "",
+                                  (unsigned long long)rva);
+                }
+#else
                 static uintptr_t base = 0, size = 0;
                 if (!base) {
                     base = (uintptr_t)GetModuleHandleW(nullptr);
@@ -434,6 +468,7 @@ class $modify(PlayLayer) {
                                       (unsigned long long)(v - base));
                     }
                 }
+#endif
                 if (!kept) snprintf(sb + o, kSb - o, "(none in module)");
                 siteArmed = true;
             }

@@ -2,7 +2,9 @@
 #include "mod/playlayer_helpers.hpp"
 // For PROCESS_MEMORY_COUNTERS's named fields -- the struct is only used through
 // GetProcAddress("K32GetProcessMemoryInfo"), so nothing links psapi.
+#ifdef GEODE_IS_WINDOWS
 #include <psapi.h>
+#endif
 
 using namespace p1;
 
@@ -39,6 +41,9 @@ static double g_secResetMs = 0.0;
 // which is a completely different hypothesis (something held until the frame ends,
 // not something transient). No third guess: the struct has names.
 static void procMemMB(size_t& cur, size_t& peak) {
+#ifndef GEODE_IS_WINDOWS
+    platform::procMemMB(cur, peak);
+#else
     using Fn = int(__stdcall*)(HANDLE, PROCESS_MEMORY_COUNTERS*, DWORD);
     static Fn fn = (Fn)GetProcAddress(GetModuleHandleA("kernel32.dll"),
                                       "K32GetProcessMemoryInfo");
@@ -49,6 +54,7 @@ static void procMemMB(size_t& cur, size_t& peak) {
         cur = pmc.WorkingSetSize / (1024 * 1024);
         peak = pmc.PeakWorkingSetSize / (1024 * 1024);
     }
+#endif
 }
 
 // NOT counting the autorelease pool directly: CCPoolManager::getCurReleasePool is
@@ -112,7 +118,16 @@ static void sectionCensus(GJBaseGameLayer* layer, size_t& live, size_t& phys) {
         if (!beg || !end || end < beg) return 0;
         return (size_t)(end - beg) / elem;
     };
-    const size_t fam[2][2] = {{0x35b0, 0x3658}, {0x35c8, 0x3670}};
+    // The section vectors and their count vectors (Windows +0x35b0/+0x3658, +0x35c8/+0x3670),
+    // located by member; the walk below stays a raw one, as it was measured.
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Winvalid-offsetof"
+    const size_t fam[2][2] = {
+        {offsetof(GJBaseGameLayer, m_nonEffectObjects),
+         offsetof(GJBaseGameLayer, m_nonEffectObjectsSizes)},
+        {offsetof(GJBaseGameLayer, m_collisionBlockSections),
+         offsetof(GJBaseGameLayer, m_collisionBlockSectionSizes)}};
+#pragma clang diagnostic pop
     for (const auto& f : fam) {
         const uint8_t* secV = b + f[0];
         const uint8_t* cntV = b + f[1];
@@ -470,7 +485,9 @@ class $modify(GJBaseGameLayer) {
                              found->hasBeenActivatedByPlayer(player) ? 1 : 0,
                              (int)found->m_isGroupDisabled,
                              (int)found->m_isGroupDisabledTemp,
-                             (int)*((unsigned char*)found + 0x740));
+                             // RingObject::m_claimTouch (Windows +0x740), read as a raw
+                             // byte of whatever object this is, as before.
+                             (int)*((unsigned char*)found + ringClaimOff()));
                 }
                 char b[448];
                 snprintf(b, sizeof(b),
@@ -1610,11 +1627,16 @@ class $modify(GJBaseGameLayer) {
     }
 
     void safeVisit() {
+#ifdef GEODE_IS_WINDOWS
         __try {
             GJBaseGameLayer::visit();
         } __except (EXCEPTION_EXECUTE_HANDLER) {
             logVisitCrashSwallowed();
         }
+#else
+        // No structured exceptions outside Windows: the visit runs unguarded.
+        GJBaseGameLayer::visit();
+#endif
     }
 
     // ---- Section-limited GD solver (read the design notes in src/solver/secsolve.hpp) ----
@@ -3965,13 +3987,12 @@ class $modify(GJBaseGameLayer) {
                     // 180/0.3333333 = 540 deg/s = 2.25 deg/tick -- exact match with
                     // measurement. The magnitude is closed, so only these 3 signs remain.
                     // Their names cannot be pulled from bindings, so emit raw bytes.
-                    const char* pb = reinterpret_cast<const char*>(m_player1);
-                    const int f1 = (int)(unsigned char)pb[0x9bf];
-                    const int f2 = (int)(unsigned char)pb[0x9c2];
-                    const int f3 = (int)(unsigned char)pb[0x9c3];
-                    float rmul = 0.f, rspd = 0.f;
-                    std::memcpy(&rmul, pb + 0xb84, sizeof(float));
-                    std::memcpy(&rspd, pb + 0x720, sizeof(float));
+                    // Windows +0x9bf / +0x9c2 / +0x9c3 / +0xb84 / +0x720, by bindings name.
+                    const int f1 = rawByte(m_player1->m_isUpsideDown);
+                    const int f2 = rawByte(m_player1->m_isGoingLeft);
+                    const int f3 = rawByte(m_player1->m_isSideways);
+                    const float rmul = m_player1->m_gravityMod;
+                    const float rspd = m_player1->m_rotationSpeed;
                     char b[512];
                     snprintf(b, sizeof(b),
                         "pobb: t=%lld size=%.3f rot=%.3f "
@@ -4033,12 +4054,9 @@ class $modify(GJBaseGameLayer) {
             // [this+0x5e8] (right after 0x39083B). m_objectSnappedTo stays stuck at
             // t=1,469 and is never updated, so the teleport target surface can only be
             // named by this raw field. 0x960/0x968 are the candidates' min/max.
-            GameObject* tg =
-                *reinterpret_cast<GameObject**>((char*)p + 0x5e8);
-            const double tgLo =
-                *reinterpret_cast<double*>((char*)p + 0x960);
-            const double tgHi =
-                *reinterpret_cast<double*>((char*)p + 0x968);
+            GameObject* tg = p->m_currentSlope2;          // Windows +0x5e8
+            const double tgLo = p->m_collidedBottomMaxY;  // Windows +0x960
+            const double tgHi = p->m_collidedLeftMaxX;    // Windows +0x968
             const int snId = sn ? sn->m_uniqueID : -1;
             const int slId = sl ? sl->m_uniqueID : -1;
             const int tgId = tg ? tg->m_uniqueID : -1;
@@ -4550,8 +4568,7 @@ class $modify(GJBaseGameLayer) {
             && !solver::g_coinMissFired && !solver::g_coinGates.empty()
             && !dpsolve::g_recordAttempt && !dpsolve::g_running.load()
             && dpsolve::g_planClaimsGoal) {
-            const int ch =
-                *reinterpret_cast<int const*>(reinterpret_cast<char const*>(this) + 0x33c);
+            const int ch = m_gameState.m_currentChannel;   // Windows +0x33c
             const double wx = m_player1->getPositionX(), wy = m_player1->getPositionY();
             for (const solver::CoinGate& g : solver::g_coinGates) {
                 if (ch != g.chan) continue;
@@ -4649,8 +4666,7 @@ class $modify(GJBaseGameLayer) {
         // carried (one value vs a per-tick track like --bandtrack). A handful
         // of lines per attempt; not gated on dpsolve so a plain replay shows it.
         if (g_started && !g_sessionOver) {
-            const float mp = *reinterpret_cast<float const*>(
-                reinterpret_cast<char const*>(this) + 0x36a8);
+            const float mp = m_maxGameplayY;   // Windows +0x36a8
             static float mpLast = -1.f;
             if (std::fabs(mp - mpLast) > 0.5f) {
                 mpLast = mp;
@@ -4722,8 +4738,7 @@ class $modify(GJBaseGameLayer) {
                    // lv22's swing section, pmax-pmin moves smoothly 324.000 -> 405.000
                    // (= height 300 divided by 0.92593 and 0.74074). Read by raw offset
                    // because bindings has no name for it
-                   << ',' << *reinterpret_cast<const float*>(
-                                 reinterpret_cast<const char*>(this) + 0x1a8)
+                   << ',' << m_gameState.m_cameraZoom   // Windows +0x1a8
                    // gframe: current rotation (0/1/2/3 = 0/90/180/270).
                    // Needed for re-anchoring. Starting with --start inside a rotated
                    // gameplay section, the model has no way to know which orientation it
@@ -4818,14 +4833,11 @@ class $modify(GJBaseGameLayer) {
                    // The size check is the layout check: MSVC's unordered_map is
                    // 0x40 bytes, which is exactly the distance between the two.
                    << ',' << [this]() {
-                          static_assert(sizeof(std::unordered_map<int, int>) == 0x40);
-                          static_assert(sizeof(std::unordered_map<int, bool>) == 0x40);
-                          auto const* base = reinterpret_cast<char const*>(this);
-                          const int ch = *reinterpret_cast<int const*>(base + 0x33c);
-                          auto const& idx = *reinterpret_cast<
-                              std::unordered_map<int, int> const*>(base + 0x348);
-                          auto const& rev = *reinterpret_cast<
-                              std::unordered_map<int, bool> const*>(base + 0x388);
+                          // Windows +0x33c / +0x348 / +0x388: the members themselves, so
+                          // the map layout is the compiler's, whatever the platform.
+                          const int ch = m_gameState.m_currentChannel;
+                          auto const& idx = m_gameState.m_spawnChannelRelated0;
+                          auto const& rev = m_gameState.m_spawnChannelRelated1;
                           auto const i = idx.find(ch);
                           auto const r = rev.find(ch);
                           return std::to_string(ch) + ','
@@ -4862,7 +4874,7 @@ class $modify(GJBaseGameLayer) {
                           for (auto const& [uid, o] : objs) {
                               if (!s.empty()) s += '|';
                               s += std::to_string(uid) + ':' + std::to_string(
-                                  o ? (int)*(reinterpret_cast<uint8_t const*>(o) + 0x28e) : -1);
+                                  o ? rawByte(o->m_isGroupDisabled) : -1);   // +0x28e
                           }
                           return s;
                       }()

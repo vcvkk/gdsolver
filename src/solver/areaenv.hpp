@@ -47,6 +47,7 @@
 // ============================================================
 #include <algorithm>
 #include <climits>
+#include <cstddef>
 #include <cmath>
 #include <string>
 #include <unordered_map>
@@ -54,26 +55,62 @@
 
 namespace areaenv {
 
-// ---- raw offsets, 2.2081 (the functions above) ----
-constexpr size_t kLayerVar = 0x10cc;        // float[2000]
-constexpr size_t kLayerEase = 0x3020;       // float*, easing tables
-constexpr size_t kLayerGroupDicts = 0xf78;  // CCArray* of CCDictionary, targetGroups lookup
+// ---- field offsets (the functions above) ----
+// These were raw Windows 2.2081 offsets. Each one is the start of a member the bindings name, so
+// they are taken from the members themselves and hold on whatever layout the build targets
+// (tools/layout-probe traced every Windows offset to its member; the original value follows
+// each name). offsetof on these classes is conditionally supported; clang supports it.
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Winvalid-offsetof"
+constexpr size_t kLayerVar = offsetof(GJBaseGameLayer, m_varianceValues);          // 0x10cc, float[2000]
+constexpr size_t kLayerEase = offsetof(GJBaseGameLayer, m_enterEasingValues);      // 0x3020, float*, easing tables
+constexpr size_t kLayerGroupDicts = offsetof(GJBaseGameLayer, m_targetGroupsArray); // 0xf78, CCArray* of CCDictionary
 // EnterEffectInstance
-constexpr size_t kLen = 0x10, kLenV = 0x14, kOffV = 0x1c, kOffYV = 0x24, kModFront = 0x28,
-                 kModBack = 0x2c, kDeadzone = 0x30, kDist = 0x34, kDistV = 0x38, kAngle = 0x3c,
-                 kAngleV = 0x40, kMoveX = 0x44, kMoveXV = 0x48, kMoveY = 0x4c, kMoveYV = 0x50,
-                 kRotV = 0x74, kScaleXV = 0x5c, kScaleYV = 0x64, kTrigger = 0xa0,
-                 kGroupIndex = 0xc0;
+constexpr size_t kLen = offsetof(EnterEffectInstance, m_length),                   // 0x10
+                 kLenV = offsetof(EnterEffectInstance, m_lengthVariance),          // 0x14
+                 kOffV = offsetof(EnterEffectInstance, m_offsetVariance),          // 0x1c
+                 kOffYV = offsetof(EnterEffectInstance, m_offsetYVariance),        // 0x24
+                 kModFront = offsetof(EnterEffectInstance, m_modFront),            // 0x28
+                 kModBack = offsetof(EnterEffectInstance, m_modBack),              // 0x2c
+                 kDeadzone = offsetof(EnterEffectInstance, m_deadzone),            // 0x30
+                 kDist = offsetof(EnterEffectInstance, m_moveDistance),            // 0x34
+                 kDistV = offsetof(EnterEffectInstance, m_moveDistanceVariance),   // 0x38
+                 kAngle = offsetof(EnterEffectInstance, m_moveAngle),              // 0x3c
+                 kAngleV = offsetof(EnterEffectInstance, m_moveAngleVariance),     // 0x40
+                 kMoveX = offsetof(EnterEffectInstance, m_moveX),                  // 0x44
+                 kMoveXV = offsetof(EnterEffectInstance, m_moveXVariance),         // 0x48
+                 kMoveY = offsetof(EnterEffectInstance, m_moveY),                  // 0x4c
+                 kMoveYV = offsetof(EnterEffectInstance, m_moveYVariance),         // 0x50
+                 kRotV = offsetof(EnterEffectInstance, m_unk074),                  // 0x74
+                 kScaleXV = offsetof(EnterEffectInstance, m_scaleXVariance),       // 0x5c
+                 kScaleYV = offsetof(EnterEffectInstance, m_scaleYVariance),       // 0x64
+                 kTrigger = offsetof(EnterEffectInstance, m_gameObject),           // 0xa0
+                 kGroupIndex = offsetof(EnterEffectInstance, m_targetGroupIndex);  // 0xc0
 // EnterEffectObject (the trigger)
-constexpr size_t kFixedDir = 0x77c, kDirVec = 0x780, kRelative = 0x788, kRelFade = 0x78c,
-                 kEaseInType = 0x790, kEaseInRate = 0x794, kEaseInBuf = 0x798,
-                 kEaseOutType = 0x79c, kEaseOutRate = 0x7a0, kEaseOutBuf = 0x7a4,
-                 kDirType = 0x7c0, kXY = 0x7c4, kEaseOut = 0x7c5, kInwards = 0x7ec,
-                 kSkipParent = 0x7f5;
+constexpr size_t kFixedDir = offsetof(EnterEffectObject, m_startAngle),            // 0x77c
+                 kDirVec = offsetof(EnterEffectObject, m_anglePosition),           // 0x780
+                 kRelative = offsetof(EnterEffectObject, m_relative),              // 0x788
+                 kRelFade = offsetof(EnterEffectObject, m_relativeFade),           // 0x78c
+                 kEaseInType = offsetof(EnterEffectObject, m_easingInType),        // 0x790
+                 kEaseInRate = offsetof(EnterEffectObject, m_easingInRate),        // 0x794
+                 kEaseInBuf = offsetof(EnterEffectObject, m_easingInBuffer),       // 0x798
+                 kEaseOutType = offsetof(EnterEffectObject, m_easingOutType),      // 0x79c
+                 kEaseOutRate = offsetof(EnterEffectObject, m_easingOutRate),      // 0x7a0
+                 kEaseOutBuf = offsetof(EnterEffectObject, m_easingOutBuffer),     // 0x7a4
+                 kDirType = offsetof(EnterEffectObject, m_directionType),          // 0x7c0
+                 kXY = offsetof(EnterEffectObject, m_xyMode),                      // 0x7c4
+                 kEaseOut = offsetof(EnterEffectObject, m_easeOutEnabled),         // 0x7c5
+                 kInwards = offsetof(EnterEffectObject, m_inbound),                // 0x7ec
+                 kSkipParent = offsetof(EnterEffectObject, m_dontEditAreaParent);  // 0x7f5
 // GameObject
-constexpr size_t kLockX = 0x2c8, kOffX = 0x2a0, kOffY = 0x2a4, kGroupKey = 0x39c,
-                 kVarIdx = 0x3f4, kStamp = 0x4e0, kMoveSkip = 0x520;
-constexpr size_t kPosSlot = 0x4a8;          // virtual, the position getAreaObjectValue reads
+constexpr size_t kLockX = offsetof(GameObject, m_tempOffsetXRelated),              // 0x2c8
+                 kOffX = offsetof(GameObject, m_positionXOffset),                  // 0x2a0
+                 kOffY = offsetof(GameObject, m_positionYOffset),                  // 0x2a4
+                 kGroupKey = offsetof(GameObject, m_uniqueID),                     // 0x39c
+                 kVarIdx = offsetof(GameObject, m_varianceIndex),                  // 0x3f4
+                 kStamp = offsetof(GameObject, m_unk4C8),                          // 0x4e0
+                 kMoveSkip = offsetof(GameObject, m_unk508);                       // 0x520
+#pragma clang diagnostic pop
 // V offsets per quantity (processAreaMoveGroupAction / getAreaObjectValue)
 constexpr int kVLen = 0, kVOff = 1, kVOffY = 2, kVMoveX = 8, kVMoveY = 9, kVDist = 10,
               kVAngle = 11;
@@ -83,14 +120,9 @@ inline T& fld(const void* p, size_t off) {
     return *reinterpret_cast<T*>(reinterpret_cast<char*>(const_cast<void*>(p)) + off);
 }
 
-// The position GD's area code reads: the object's virtual at +0x4a8, called the way
-// processAreaMoveGroupAction calls it (this in rcx, the result through rdx).
-inline cocos2d::CCPoint areaPos(GameObject* o) {
-    using Fn = cocos2d::CCPoint* (*)(GameObject*, cocos2d::CCPoint*);
-    auto fn = reinterpret_cast<Fn>((*reinterpret_cast<void***>(o))[kPosSlot / 8]);
-    cocos2d::CCPoint p;
-    return *fn(o, &p);
-}
+// The position GD's area code reads: the virtual processAreaMoveGroupAction calls, which is
+// GameObject::getRealPosition (Windows vtable slot +0x4a8 -- the probe's vtable dump names it).
+inline cocos2d::CCPoint areaPos(GameObject* o) { return o->getRealPosition(); }
 
 struct Range {
     double lo = 0, hi = 0;

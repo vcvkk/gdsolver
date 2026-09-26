@@ -23,6 +23,9 @@
 // recorded on a pad inside a worker needs controller=on.
 #include "mod/config.hpp"
 
+// XInput is Windows'; a device has no solve fleet and no pad stack to keep workers out of.
+#ifdef GEODE_IS_WINDOWS
+
 using namespace p1;
 
 namespace {
@@ -70,3 +73,5 @@ $execute {
     if (n == 0)
         log::warn("controller: no XInput entry point found — the pad is NOT blocked");
 }
+
+#endif  // GEODE_IS_WINDOWS

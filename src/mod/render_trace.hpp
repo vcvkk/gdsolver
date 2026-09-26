@@ -23,13 +23,9 @@ inline bool renderSuppressed() {
 // was raised.
 inline void traceModifierCounters(PlayerObject* p) {
     if (!g_cfg.hitboxTrace || !g_started || g_sessionOver) return;
-    const char* pb = reinterpret_cast<const char*>(p);
-    int v[5];
-    memcpy(&v[0], pb + 0xb74, 4);   // NoAutoJump
-    memcpy(&v[1], pb + 0xb78, 4);   // DartSlide
-    memcpy(&v[2], pb + 0xb7c, 4);   // HitHead
-    memcpy(&v[3], pb + 0xb80, 4);   // FlipGravity
-    memcpy(&v[4], pb + 0xb88, 4);   // Force
+    // Windows +0xb74 / +0xb78 / +0xb7c / +0xb80 / +0xb88, by bindings name.
+    const int v[5] = {p->m_stateNoAutoJump, p->m_stateDartSlide, p->m_stateHitHead,
+                      p->m_stateFlipGravity, p->m_stateForce};
     static int prev[5] = {0, 0, 0, 0, 0};
     bool up = false;
     for (int i = 0; i < 5; ++i) {

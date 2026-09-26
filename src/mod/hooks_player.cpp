@@ -119,12 +119,12 @@ class $modify(PlayerObject) {
     // cfg `presstrace=t0,t1`: the press latch bytes, the ground flag and vy (see g_pressT0).
     void pressLine(const char* where) {
         if (g_tick < g_pressT0 || g_tick > g_pressT1 || !g_started || g_sessionOver) return;
-        const unsigned char* raw = reinterpret_cast<const unsigned char*>(this);
         char b[200];
         snprintf(b, sizeof(b),
                  "press: t=%lld at=%s b985=%d b986=%d b98a=%d onGround=%d vy=%.4f y=%.4f",
-                 (long long)g_tick, where, (int)raw[0x985], (int)raw[0x986], (int)raw[0x98a],
-                 (int)raw[0x9c1], (double)this->m_yVelocity, this->getPositionY());
+                 (long long)g_tick, where, rawByte(m_jumpBuffered), rawByte(m_stateRingJump),
+                 rawByte(m_stateRingJump2), rawByte(m_isOnGround), (double)this->m_yVelocity,
+                 this->getPositionY());
         writeResult(b);
     }
 
@@ -146,19 +146,18 @@ class $modify(PlayerObject) {
     // stick tests (0x38e841); read as a vector that is 8 bytes per entry, unverified.
     void stickLine(const char* where) {
         if (g_tick < g_stickT0 || g_tick > g_stickT1 || !g_started || g_sessionOver) return;
-        const unsigned char* raw = reinterpret_cast<const unsigned char*>(this);
-        auto uidAt = [raw](size_t off) -> int {
-            auto* o = *reinterpret_cast<GameObject* const*>(raw + off);
-            return o ? o->m_uniqueID : -1;
-        };
-        const long long q0 = *reinterpret_cast<const long long*>(raw + 0x5b8);
-        const long long q1 = *reinterpret_cast<const long long*>(raw + 0x5c0);
+        auto uidOf = [](GameObject* o) -> int { return o ? o->m_uniqueID : -1; };
+        // +0x5b8 / +0x5c0 on Windows: m_collisionLogBottom and m_collisionLogLeft, two
+        // CCDictionary pointers (not a vector's ends, as first guessed).
+        const long long q0 = (long long)(intptr_t)m_collisionLogBottom;
+        const long long q1 = (long long)(intptr_t)m_collisionLogLeft;
         char b[288];
         snprintf(b, sizeof(b),
                  "stick: t=%lld dt=%lld at=%s g608=%d s600=%d f658=%d slope=%d q5b8=%lld "
                  "ax=%d og=%d x=%.4f y=%.4f vy=%.4f",
-                 (long long)g_tick, (long long)g_tick + 1, where, uidAt(0x608), uidAt(0x600),
-                 (int)raw[0x658], uidAt(0x5e8), q1 - q0, (int)raw[0x9c3], (int)raw[0x9c1],
+                 (long long)g_tick, (long long)g_tick + 1, where, uidOf(m_lastGroundObject),
+                 uidOf(m_collidedObject), rawByte(m_isCollidingWithSlope), uidOf(m_currentSlope2),
+                 q1 - q0, rawByte(m_isSideways), rawByte(m_isOnGround),
                  this->getPositionX(), this->getPositionY(), (double)this->m_yVelocity);
         writeResult(b);
     }
@@ -192,9 +191,9 @@ class $modify(PlayerObject) {
         const float y0 = this->getPositionY();
         PlayerObject::spiderTestJump(dynamic);
         if (!isP1 || !g_cfg.standTrace || !g_started || g_sessionOver) return;
-        auto* tg = *reinterpret_cast<GameObject**>((char*)this + 0x5e8);
-        const double lo = *reinterpret_cast<double*>((char*)this + 0x960);
-        const double hi = *reinterpret_cast<double*>((char*)this + 0x968);
+        auto* tg = m_currentSlope2;               // Windows +0x5e8
+        const double lo = m_collidedBottomMaxY;   // Windows +0x960
+        const double hi = m_collidedLeftMaxX;     // Windows +0x968
         char tb[192] = "-";
         if (tg) {
             auto q = tg->getPosition();
@@ -259,10 +258,9 @@ class $modify(PlayerObject) {
             static int lines = 0;
             if (++lines <= 400) {
                 const char* pb = reinterpret_cast<const char*>(this);
-                int b80 = 0, b74 = 0; float b84 = 0.f;
-                memcpy(&b80, pb + 0xb80, 4);
-                memcpy(&b74, pb + 0xb74, 4);
-                memcpy(&b84, pb + 0xb84, 4);
+                // Windows +0xb80 / +0xb74 / +0xb84
+                const int b80 = m_stateFlipGravity, b74 = m_stateNoAutoJump;
+                const float b84 = m_gravityMod;
                 // Pin down what b80/b74 are by name. From the raw offset values alone it
                 // cannot be decided what the "2" is a 2 of
                 const char* self = pb;
@@ -307,6 +305,28 @@ class $modify(PlayerObject) {
         // decide "which one took effect on this tick".
         // Only frames inside the GD binary itself are picked up and printed (Geode's
         // trampolines live in another module, so they drop out naturally).
+#ifndef GEODE_IS_WINDOWS
+        {
+            void* fr[24];
+            const int n = platform::captureStack(fr, 24);
+            const auto base = (uintptr_t)geode::base::get();
+            std::string cs;
+            for (int i = 0; i < n; ++i) {
+                const uintptr_t a = (uintptr_t)fr[i];
+                uintptr_t rva = 0;
+                char t[32];
+                if (platform::gameRva(a, rva))
+                    snprintf(t, sizeof(t), " gd:%llX", (unsigned long long)rva);
+                else
+                    snprintf(t, sizeof(t), " ?%llX", (unsigned long long)a);
+                cs += t;
+            }
+            writeResult(("pfgstk: t=" + std::to_string((long long)g_tick)
+                         + " n=" + std::to_string(n)
+                         + " base=" + std::to_string((long long)base)
+                         + cs).c_str());
+        }
+#else
         {
             void* fr[24];
             const USHORT n = RtlCaptureStackBackTrace(0, 24, fr, nullptr);
@@ -327,6 +347,7 @@ class $modify(PlayerObject) {
                          + " base=" + std::to_string((long long)base)
                          + cs).c_str());
         }
+#endif
         char b[224];
         snprintf(b, sizeof(b),
                  "pfg: t=%lld flip=%d noFx=%d up %d->%d x=%.3f y=%.3f vy=%.3f "
@@ -428,7 +449,8 @@ class $modify(PlayerObject) {
         // this way must never reach gdref or a baseline.
         const bool inWin = g_tick >= g_cfg.hbFrom
                         && (g_cfg.hbTo <= 0 || g_tick <= g_cfg.hbTo);
-        unsigned char* const spentMirror = (unsigned char*)this + 0x98a;
+        unsigned char* const spentMirror =                    // Windows +0x98a
+            reinterpret_cast<unsigned char*>(&m_stateRingJump2);
         const bool subst = g_cfg.subRingSpent && isP1 && inWin;
         const unsigned char savedSpent = subst ? *spentMirror : (unsigned char)0;
         if (subst) {
@@ -473,17 +495,15 @@ class $modify(PlayerObject) {
         // Under `subringspent=1` the b98a printed here is the FORCED value; the bit as GD
         // left it is on the `subst:` line.
         if (inWin && orbtrace::g_lines < 400) {
-            auto bit = [&](int off) {
-                return (int)*((unsigned char*)this + off);
-            };
             char cb[256];
             snprintf(cb, sizeof(cb),
                 "orbcall: t=%lld uid=%d id=%d vy=%.4f "
                 "b989=%d b98a=%d b98b=%d b98c=%d b98d=%d b9e4=%d claim=%d",
                 (long long)g_tick, object->m_uniqueID, object->m_objectID,
-                vyBefore, bit(0x989), bit(0x98a), bit(0x98b), bit(0x98c),
-                bit(0x98d), bit(0x9e4),
-                (int)*((unsigned char*)object + 0x740));
+                vyBefore, rawByte(m_stateJumpBuffered), rawByte(m_stateRingJump2),
+                rawByte(m_touchedRing), rawByte(m_touchedCustomRing),
+                rawByte(m_touchedGravityPortal), rawByte(m_isDashing),
+                rawByte(object->m_claimTouch));
             writeResult(cb);
             ++orbtrace::g_lines;
         }
@@ -714,14 +734,13 @@ class $modify(PlayerObject) {
         //            clears it, so it reads 0 while the button is still down
         //   p9b8  -- m_maybeUpsideDownSlope, GD's own "this contact is the
         //            underside branch" flag (the side the nudge's sign follows)
-        const unsigned char* raw = reinterpret_cast<const unsigned char*>(this);
-        const unsigned char p986 = *(raw + 0x986);
+        const unsigned char p986 = (unsigned char)rawByte(m_stateRingJump);   // Windows +0x986
         // The two the nudge's gate is said to read: +0x68c (bVar22, saved) and
         // +0x985. m_jumpBuffered is printed beside +0x985 because they are
         // supposed to be the same byte -- if they disagree the offset is wrong,
         // and the rest of the row would be read against the wrong field.
-        const unsigned char b68c = *(raw + 0x68c);
-        const unsigned char b985 = *(raw + 0x985);
+        const unsigned char b68c = (unsigned char)rawByte(m_slopeFlipGravityRelated);  // +0x68c
+        const unsigned char b985 = (unsigned char)rawByte(m_jumpBuffered);             // +0x985
         // 640, not 416: the IN block above adds about 130 characters and
         // snprintf TRUNCATES SILENTLY -- the new fields sit at the end of the
         // line, so an undersized buffer would drop exactly the ones this trace
@@ -804,13 +823,11 @@ class $modify(PlayerObject) {
             && (g_cfg.hbTo <= 0 || g_tick <= g_cfg.hbTo)) {
             static int fpLines = 0;
             if (++fpLines <= 40000) {
-                const char* ob = reinterpret_cast<const char*>(obj);
                 const char* pb = reinterpret_cast<const char*>(this);
-                const int o515 = (int)(unsigned char)ob[0x515];
-                float s394 = 0.f, s398 = 0.f;
-                memcpy(&s394, pb + 0x394, sizeof(float));
-                memcpy(&s398, pb + 0x398, sizeof(float));
-                const int plat = (int)(unsigned char)pb[0xb70];
+                const int o515 = rawByte(obj->m_isPassable);          // Windows obj+0x515
+                const float s394 = m_spriteWidthScale;                // Windows +0x394
+                const float s398 = m_spriteHeightScale;               // Windows +0x398
+                const int plat = rawByte(m_isPlatformer);             // Windows +0xb70
                 // +0xc44 is the escape hatch in collidedWithSlopeInternal's kill
                 // gate: `(m_slopeIsHazard == 0 && (A||B)) || player+0xc44` means
                 // a SPIKED ramp kills unless this byte is set. The model kills
@@ -825,7 +842,7 @@ class $modify(PlayerObject) {
                 // So whether the model over-kills is one empirical question:
                 // does this byte ever read 1 on the corpus? Printed here rather
                 // than guessed, under the same runtime layout canary.
-                const int c44 = (int)(unsigned char)pb[0xc44];
+                const int c44 = rawByte(m_ignoreDamage);              // Windows +0xc44
                 // The canary is a RUNTIME layout measurement, not offsetof: it needs no header,
                 // and it checks the object in front of us rather than a compile-time constant.
                 const unsigned ofsUp = (unsigned)(
@@ -834,11 +851,11 @@ class $modify(PlayerObject) {
                 snprintf(fb, sizeof(fb),
                     "fprobe: t=%lld who=%s obj=%d id=%d hit=%d size=%.2f "
                     "o515=%d p394=%.4f p398=%.4f plat=%d c44=%d "
-                    "ofs=(0x515,0x394,0x398,0xb70,0xc44) canary_up=0x%x want=0x9bf %s",
+                    "ofs=(0x515,0x394,0x398,0xb70,0xc44) canary_up=0x%x want=0x%x %s",
                     (long long)g_tick, who, obj->m_uniqueID, obj->m_objectID,
                     r ? 1 : 0, this->m_vehicleSize,
                     o515, (double)s394, (double)s398, plat, c44,
-                    ofsUp, ofsUp == 0x9bf ? "LAYOUT-OK" : "LAYOUT-MISMATCH");
+                    ofsUp, kUpsideDownOff, ofsUp == kUpsideDownOff ? "LAYOUT-OK" : "LAYOUT-MISMATCH");
                 writeResult(fb);
             }
         }

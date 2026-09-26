@@ -72,6 +72,7 @@ class $modify(P1MenuLayer, MenuLayer) {
                     gm->m_vsyncEnabled = false;
                     gm->m_customFPSTarget = (float)g_cfg.fps;
                     gm->updateCustomFPS();
+#ifdef GEODE_IS_WINDOWS
                     // vsync is really the GL swap interval. Disable it directly at runtime
                     using SwapIntervalFn = BOOL(WINAPI*)(int);
                     auto ogl = GetModuleHandleA("opengl32.dll");
@@ -83,6 +84,7 @@ class $modify(P1MenuLayer, MenuLayer) {
                             log::info("phase1: vsync disabled via wglSwapIntervalEXT");
                         }
                     }
+#endif
                     log::info("phase1: forced custom FPS to {}", g_cfg.fps);
                 }
                 this->runAction(CCSequence::create(

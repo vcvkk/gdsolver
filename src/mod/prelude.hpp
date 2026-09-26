@@ -44,3 +44,26 @@
 #include <vector>
 
 using namespace geode::prelude;
+
+#include "mod/platform.hpp"
+
+// The byte a member occupies, as memory holds it. The diagnostics used to read game fields by raw
+// Windows 2.2081 offset and print the byte they found; every one of those offsets turned out to be
+// the start of a member the bindings name (tools/layout-probe), so they now read the member -- and
+// this keeps them printing the raw byte, not a value the compiler has normalised.
+template <class T>
+inline int rawByte(T const& member) {
+    return (int)*reinterpret_cast<unsigned char const*>(&member);
+}
+
+// Where the canary and the ring-claim byte sit, per layout. 0x9bf / 0x740 are Windows 2.2081; the
+// iOS values are the ones tools/layout-probe measured for the same members.
+#ifdef GEODE_IS_IOS
+inline constexpr unsigned kUpsideDownOff = 0x977;
+#else
+inline constexpr unsigned kUpsideDownOff = 0x9bf;
+#endif
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Winvalid-offsetof"
+inline constexpr size_t ringClaimOff() { return offsetof(RingObject, m_claimTouch); }
+#pragma clang diagnostic pop
