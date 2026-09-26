@@ -4,7 +4,7 @@
 
 using namespace geode::prelude;
 
-extern "C" GEODE_DLL size_t gdsolverLayoutProbe() {
+size_t gdsolverLayoutProbe() {
     return sizeof(PlayerObject) + sizeof(GameObject) + sizeof(EnhancedGameObject)
          + sizeof(EffectGameObject) + sizeof(EnterEffectObject) + sizeof(GJBaseGameLayer)
          + sizeof(PlayLayer) + sizeof(GJEffectManager) + sizeof(EnterEffectInstance)
