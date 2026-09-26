@@ -20,7 +20,7 @@ public:
     // The Coins switch (g_uiCoins). Its own button under the mode, so the mode cycle stays the
     // three it always was; hidden in Normal, where it means nothing.
     cocos2d::CCLabelBMFont* m_coinLabel = nullptr;
-    cocos2d::CCMenuItemLabel* m_coinItem = nullptr;
+    CCMenuItemSpriteExtra* m_coinItem = nullptr;
 
     static const char* coinText() { return g_uiCoins ? "Coins: On" : "Coins: Off"; }
 
@@ -51,12 +51,12 @@ public:
         this->addChild(tag);
         m_modeLabel = CCLabelBMFont::create(uiModeName(g_uiMode), "bigFont.fnt");
         m_modeLabel->setScale(0.55f);
-        auto* item = CCMenuItemLabel::create(m_modeLabel, this,
+        auto* item = CCMenuItemSpriteExtra::create(m_modeLabel, this,
             menu_selector(SolverPanelLayer::onMode));
         item->setAnchorPoint({0.f, 0.5f});
         m_coinLabel = CCLabelBMFont::create(coinText(), "bigFont.fnt");
         m_coinLabel->setScale(0.4f);
-        m_coinItem = CCMenuItemLabel::create(m_coinLabel, this,
+        m_coinItem = CCMenuItemSpriteExtra::create(m_coinLabel, this,
             menu_selector(SolverPanelLayer::onCoins));
         m_coinItem->setAnchorPoint({0.f, 0.5f});
         auto* menu = CCMenu::create(item, m_coinItem, nullptr);
